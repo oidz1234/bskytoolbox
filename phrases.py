@@ -9,23 +9,37 @@ from datetime import datetime
 
 
 def check_msg(row, text):
+    id = row[0]
     email = row[1]
     phrase = row[2] # the phrase the user wants
     pattern = r'\b' + re.escape(phrase.lower()) + r'\b'
     matches = re.findall(pattern, text.lower())
     if matches:
-        print('store this msg')
+        print('store this')
         print(phrase)
         print(text)
         print(email)
-        subprocess.run([
-        "mail",
-        "-s", f"Your phrase {phrase} has been mentioned on bluesky",
-        email,
-        "-r", "noreply@bskytoolbox.com"
-        ], input=f'{text} \n\n\n\n ------------- \n\n\n\n yeah I have no idea how to link the post... \n\n\n unsubscribe https://bskytoolbox.com/?action=unsubscribe&email={email}', text=True)
 
-        print(f'{datetime.now()} : sent {text}, to {email}')
+        cursor.execute(
+                """
+                INSERT INTO messages (phrase_id, message_text, source, timestamp)
+                VALUES (?, ?, ?, ?)
+                """,
+                (id, text, "bsky", datetime.now())
+        )
+        conn.commit()
+            
+
+
+
+#         subprocess.run([
+#         "mail",
+#         "-s", f"Your phrase {phrase} has been mentioned on bluesky",
+#         email,
+#         "-r", "noreply@bskytoolbox.com"
+#         ], input=f'{text} \n\n\n\n ------------- \n\n\n\n yeah I have no idea how to link the post... \n\n\n unsubscribe https://bskytoolbox.com/?action=unsubscribe&email={email}', text=True)
+# 
+#         print(f'{datetime.now()} : sent {text}, to {email}')
 
 def on_message(ws, message):
     try:
@@ -39,7 +53,7 @@ def on_message(ws, message):
         
 
         try:
-            table_name = "phrases"  # Replace with your table name
+            table_name = "user_phrases"  
             cursor.execute(f"SELECT * FROM {table_name}")
             rows = cursor.fetchall()
 

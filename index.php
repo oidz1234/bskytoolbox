@@ -2,82 +2,121 @@
 // Define the database file
 $dbFile = 'database.sqlite';
 
+// Initialize message variables
+$messageText = '';
+$messageClass = '';
+
 try {
     // Create a new SQLite database if it doesn't exist
     $db = new PDO("sqlite:$dbFile");
-
-    // Set error mode to exceptions
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Create the `phrases` table if it doesn't exist
-    $createTableSQL = "CREATE TABLE IF NOT EXISTS phrases (
+        // Create tables if they don't exist
+    $createTablesSQL = "
+    -- Users table
+    CREATE TABLE IF NOT EXISTS users (
+        email TEXT PRIMARY KEY,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- User Phrases table
+    CREATE TABLE IF NOT EXISTS user_phrases (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT NOT NULL,
-        phrase TEXT NOT NULL
+        email TEXT,
+        phrase TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (email) REFERENCES users(email),
+        UNIQUE (email, phrase)
+    );
+
+    -- Messages table
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phrase_id INTEGER,
+        message_text TEXT,
+        source TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (phrase_id) REFERENCES user_phrases(id)
     )";
-    $db->exec($createTableSQL);
-
-      // Check if the action is unsubscribe
-    if (isset($_GET['action']) && $_GET['action'] === 'unsubscribe') {
-        if (isset($_GET['email']) && filter_var($_GET['email'], FILTER_VALIDATE_EMAIL)) {
-            $email = $_GET['email'];
-
-            // Check if the email exists in the phrases table
-            $checkEmailSQL = "SELECT id FROM phrases WHERE email = :email";
-            $stmt = $db->prepare($checkEmailSQL);
-            $stmt->bindParam(':email', $email, PDO::PARAM_STR);
-            $stmt->execute();
-            $emailRow = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($emailRow) {
-                // Delete all entries for the given email
-                $deleteEmailSQL = "DELETE FROM phrases WHERE email = :email";
-                $stmt = $db->prepare($deleteEmailSQL);
-                $stmt->bindParam(':email', $email, PDO::PARAM_STR);
-
-                if ($stmt->execute()) {
-                    echo "You have successfully unsubscribed.";
-                } else {
-                    echo "Failed to unsubscribe. Please try again.";
-                }
-            } else {
-                echo "The provided email does not exist in our system.";
-            }
-        } else {
-            echo "Invalid email address.";
-        }
-    }
+    $db->exec($createTablesSQL);
 
     // Check if form was submitted
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         // Capture form values
         $email = $_POST['email'];
-        $phrase = $_POST['phrase'];
+        $phrase = trim($_POST['phrase']); // Trim whitespace
 
-        if (strlen($phrase) <= 3) {
-            echo "bruh greater then 3 chars please :) (this is my attempt to stop spam I guess)";
-            exit;
-       }
+        // Start a transaction
+        $db->beginTransaction();
 
-        // Prepare and execute the insertion query
-        $insertSQL = "INSERT INTO phrases (email, phrase) VALUES (:email, :phrase)";
-        $stmt = $db->prepare($insertSQL);
-        $stmt->bindParam(':email', $email, PDO::PARAM_STR);
-        $stmt->bindParam(':phrase', $phrase, PDO::PARAM_STR);
+        try {
+            // Insert user if not exists
+            $insertUserSQL = "INSERT OR IGNORE INTO users (email) VALUES (:email)";
+            $stmt = $db->prepare($insertUserSQL);
+            $stmt->bindParam(':email', $email, PDO::PARAM_STR);
+            $stmt->execute();
 
-        // Execute the query
-        if ($stmt->execute()) {
-            echo "Yay, you will now get emails when your phrase matches";
-        } else {
-            echo "Failed to create a new record.";
+            // Only insert phrase if it's not empty and longer than 3 characters
+            if (!empty($phrase) && strlen($phrase) > 3) {
+                // Insert phrase for the user
+                $insertPhraseSQL = "INSERT OR REPLACE INTO user_phrases (email, phrase) VALUES (:email, :phrase)";
+                $stmt = $db->prepare($insertPhraseSQL);
+                $stmt->bindParam(':email', $email, PDO::PARAM_STR);
+                $stmt->bindParam(':phrase', $phrase, PDO::PARAM_STR);
+                $stmt->execute();
+
+                $messageText = "Yay, you can now view your matches, just type your email in";
+    echo '
+    <form id="redirectForm" action="view-messages.php" method="POST">
+        <input type="hidden" name="email" value="' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '">
+    </form>
+    <script>
+        document.getElementById("redirectForm").submit();
+    </script>
+    ';
+
+                $messageClass = "success";
+            } else {
+                // Check if user already has phrases
+                $checkPhrasesSQL = "SELECT COUNT(*) FROM user_phrases WHERE email = :email";
+                $stmt = $db->prepare($checkPhrasesSQL);
+                $stmt->bindParam(':email', $email, PDO::PARAM_STR);
+                $stmt->execute();
+                $phraseCount = $stmt->fetchColumn();
+
+                // Redirect to view messages if user has existing phrases
+                if ($phraseCount > 0) {
+    echo '
+    <form id="redirectForm" action="view-messages.php" method="POST">
+        <input type="hidden" name="email" value="' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '">
+    </form>
+    <script>
+        document.getElementById("redirectForm").submit();
+    </script>
+    ';
+    exit;
+
+                } else {
+                    $messageText = "Please enter a phrase longer than 3 characters";
+                    $messageClass = "error";
+                }
+            }
+
+            // Commit the transaction
+            $db->commit();
+        } catch (PDOException $e) {
+            // Rollback the transaction on error
+            $db->rollBack();
+            $messageText = "Failed to process your request: " . $e->getMessage();
+            $messageClass = "error";
         }
     }
 } catch (PDOException $e) {
     // Handle database connection and query errors
-    echo "Database error: " . $e->getMessage();
+    $messageText = "Database error: " . $e->getMessage();
+    $messageClass = "error";
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -221,7 +260,7 @@ try {
             margin-top: 1rem;
             padding: 1rem;
             border-radius: 6px;
-            display: none;
+            display: block;
         }
         
         .message.success {
@@ -252,12 +291,19 @@ try {
     <div class="container">
         <div class="header">
             <h1>Bluesky Mention Tracker</h1>
-            <p class="subtitle">Insert a word, phrase or sentence, get an email when someone says that on Bluesky</p>
-<br>
+            <p class="subtitle">Insert a word, phrase or sentence, see when someone says that on Bluesky</p>
+            <br>
             <p class="subtitle">CaSe don't matter</p>
+            <br>
+            <p class="subtitle">No registration, your email is your key to everything.</p>
         </div>
 
-        <div id="message" class="message"></div>
+        <?php if (!empty($messageText)): ?>
+            <div id="message" class="message <?php echo $messageClass; ?>">
+                <?php echo htmlspecialchars($messageText); ?>
+            </div>
+        <?php endif; ?>
+
         <div id="debug"></div>
         <form id="signupForm" method="post">
             <div class="form-group">
@@ -266,12 +312,12 @@ try {
             </div>
 
             <div class="form-group">
-                <label for="phrase">Phrase</label>
-                <input type="text" name="phrase" id="phrase" required>
+                <label for="phrase">Phrase (not needed if you just want to login)</label>
+                <input type="text" name="phrase" id="phrase">
             </div>
 
-            <button type="submit">Sign up</button>
-    </form>
+            <button type="submit">Start Tracking</button>
+        </form>
 
         <div class="divider">
             <span>Features</span>
@@ -282,7 +328,7 @@ try {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                 </svg>
-                <span>Will almost certaintly end up in your spam</span>
+                <span>This was going to be email but it kept going to spam :(</span>
             </div>
             <div class="feature-item">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -304,3 +350,5 @@ try {
             </div>
         </div>
     </div>
+</body>
+</html>
