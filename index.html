@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bluesky tool box</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f0f8ff; /* Soft pastel blue background */
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .navbar {
+      width: 100%;
+      padding: 15px 0;
+      text-align: center;
+      background-color: #91c9f9; /* Pastel blue */
+      color: white;
+      font-size: 18px;
+    }
+    .container {
+      flex: 1;
+      display: flex;
+      flex-direction: column; /* Vertical stacking */
+      height: 100%;
+      width: 100%;
+    }
+    .box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: #d6e9ff; /* Lighter pastel blue */
+      text-align: center;
+      transition: transform 0.3s ease, background-color 0.3s ease;
+      border: 2px solid #ffffff;
+      cursor: pointer;
+    }
+    .box:hover {
+      transform: scale(1.03); /* Slightly larger on hover */
+      background-color: #bddfff; /* Slightly darker pastel blue */
+    }
+    .box h2 {
+      margin: 0;
+      font-size: 32px;
+      color: #005b96; /* Darker blue for contrast */
+    }
+    .box p {
+      margin-top: 10px;
+      font-size: 20px;
+      color: #003b64; /* Muted blue for description text */
+    }
+
+    /* Mobile Responsive Styling */
+    @media (max-width: 768px) {
+      .box {
+        flex: 1; /* Maintain full height stacking */
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">Bluesky toolbox
+      <p> Made by Mark McNally </p>
+      <p> Everything is free and <a href="https://github.com/oidz1234/bskytoolbox">Open Source</a></p>
+  </div>
+  <div class="container">
+    <div class="box" onclick="location.href='/mentions'">
+      <h2>Mentions Tracker</h2>
+      <p>Monitor phrases/words on bluesky</p>
+    </div>
+    <div class="box" onclick="location.href='/word-checker'">
+      <h2>Most popular words</h2>
+      <p>Show the most popular words on bluesky right now!</p>
+    </div>
+  </div>
+</body>
+</html>
+
