@@ -156,6 +156,7 @@ try {
                             <div class="message-header">
                                 <span>Phrase: <?php echo htmlspecialchars($message['phrase']); ?></span>
                                 <span><?php echo htmlspecialchars($message['timestamp']); ?></span>
+                                <span><a href="https://bsky.app/search?q=<?php echo htmlspecialchars($message['message_text']); ?>">link</a></span>
                             </div>
                             <div class="message-text">
                                 <?php echo htmlspecialchars($message['message_text']); ?>
