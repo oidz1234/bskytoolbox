@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bluesky Sentiment Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        h1 {
+            margin: 20px 0;
+        }
+
+        #sentiment-score {
+            font-size: 24px;
+            margin-top: 20px;
+        }
+
+        /* Flexbox Layout for the chart and messages */
+        .content-wrapper {
+            display: flex;
+            flex: 1;
+            flex-direction: row;
+            justify-content: center;
+        }
+
+        /* Chart section (takes 3/4 of the screen width) */
+        #chart-section {
+            flex: 3;
+            padding: 10px;
+        }
+
+        /* Messages section (takes 1/4 of the screen width) */
+        #messages-section {
+            flex: 1;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-left: 1px solid #ddd;
+            overflow-y: auto;
+        }
+
+        #sentiment-chart {
+            width: 100%;
+            height: 100%;
+        }
+
+        .positive {
+            color: green;
+        }
+
+        .negative {
+            color: red;
+        }
+
+        .neutral {
+            color: gray;
+        }
+
+        #messages {
+            margin-top: 20px;
+        }
+
+        #messages ul {
+            padding: 0;
+            list-style-type: none;
+        }
+
+        #messages li {
+            padding: 5px;
+            background-color: #f0f0f0;
+            margin: 2px 0;
+            border-radius: 4px;
+        }
+
+        /* Make the chart responsive */
+        canvas {
+            width: 100% !important;
+            height: auto !important;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Is Bluesky happy right now? </h1>
+<p>Real time happiness analysis</p>
+
+<!-- Sentiment Score at the top -->
+<div id="sentiment-score">
+    Positive: <span id="positive-value">0</span> | Negative: <span id="negative-value">0</span> | Neutral: <span id="neutral-value">0</span>
+</div>
+
+<!-- Content Wrapper for chart and messages -->
+<div class="content-wrapper">
+
+    <!-- Chart Section (3/4 of the screen) -->
+    <div id="chart-section">
+        <!-- Sentiment Gauge Chart (Speedometer) -->
+        <canvas id="gauge-chart"></canvas>
+    </div>
+
+    <!-- Messages Section (1/4 of the screen) -->
+    <div id="messages-section">
+        <h3>Last 10 Messages:</h3>
+        <ul id="message-list">
+            <!-- Messages will be listed here -->
+        </ul>
+    </div>
+
+</div>
+
+<script>
+    // Example positive and negative word lists
+    const positiveWords = ['happy', 'good', 'great', 'awesome', 'fantastic', 'love', 'excited'];
+    const negativeWords = ['sad', 'bad', 'terrible', 'hate', 'angry', 'frustrated', 'upset'];
+
+    // Simple sentiment analysis function
+    function analyzeSentiment(text) {
+        // Convert text to lowercase and split into words
+        const words = text.toLowerCase().split(/\s+/);
+        
+        let positiveCount = 0;
+        let negativeCount = 0;
+
+        // Count positive and negative words in the text
+        words.forEach(word => {
+            if (positiveWords.includes(word)) {
+                positiveCount++;
+            } else if (negativeWords.includes(word)) {
+                negativeCount++;
+            }
+        });
+
+        // Determine sentiment
+        const sentimentScore = positiveCount - negativeCount;
+        if (sentimentScore > 0) {
+            return 'positive';
+        } else if (sentimentScore < 0) {
+            return 'negative';
+        } else {
+            return 'neutral';
+        }
+    }
+
+    // WebSocket connection to Bluesky
+    const socket = new WebSocket("wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post");
+
+    // Create a gauge (speedometer) chart
+    const ctx = document.getElementById('gauge-chart').getContext('2d');
+    const sentimentGauge = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Positive', 'Negative'],
+            datasets: [{
+                data: [0, 0],  // Only show positive and negative
+                backgroundColor: ['rgba(75, 192, 192, 0.7)', 'rgba(255, 99, 132, 0.7)'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            cutoutPercentage: 70,
+            rotation: -Math.PI,
+            circumference: Math.PI,
+            responsive: true,
+            animation: {
+                animateScale: true,
+                animateRotate: true
+            },
+            tooltips: { enabled: false },
+            hover: { mode: null }
+        }
+    });
+
+    // Variables to keep track of sentiment counts
+    let positiveCount = 0;
+    let negativeCount = 0;
+    let neutralCount = 0;
+
+    // Array to store last 10 messages
+    const messageHistory = [];
+
+    // WebSocket onmessage handler
+    socket.onmessage = function(event) {
+        try {
+            const message = JSON.parse(event.data);
+            const text = message?.commit?.record?.text;
+
+            if (text) {
+                const sentiment = analyzeSentiment(text);
+
+                // Update sentiment counts based on sentiment result
+                updateSentimentCounts(sentiment);
+
+                // Update the sentiment gauge (speedometer) chart
+                updateSentimentGauge();
+
+                // Update sentiment score display
+                updateSentimentScore();
+
+                // Store and display the last 10 messages
+                addMessageToHistory(text);
+                updateMessageList();
+            }
+        } catch (error) {
+            console.error("Error processing message:", error);
+        }
+    };
+
+    // Update sentiment gauge chart based on sentiment analysis
+    function updateSentimentGauge() {
+        sentimentGauge.data.datasets[0].data = [positiveCount, negativeCount];
+        sentimentGauge.update();
+    }
+
+    // Update sentiment score display
+    function updateSentimentScore() {
+        document.getElementById('positive-value').textContent = positiveCount;
+        document.getElementById('negative-value').textContent = negativeCount;
+        document.getElementById('neutral-value').textContent = neutralCount;
+    }
+
+    // Update sentiment counts based on sentiment result
+    function updateSentimentCounts(sentiment) {
+        if (sentiment === 'positive') {
+            positiveCount++;
+        } else if (sentiment === 'negative') {
+            negativeCount++;
+        } else {
+            neutralCount++;
+        }
+    }
+
+    // Add the latest message to history (keeping only the last 10)
+    function addMessageToHistory(message) {
+        messageHistory.push(message);
+        if (messageHistory.length > 10) {
+            messageHistory.shift();  // Remove the oldest message if there are more than 10
+        }
+    }
+
+    // Update the message list display
+    function updateMessageList() {
+        const messageList = document.getElementById('message-list');
+        messageList.innerHTML = '';  // Clear the list
+
+        // Add each message in the history array to the list
+        messageHistory.forEach(msg => {
+            const li = document.createElement('li');
+            li.textContent = msg;
+            messageList.appendChild(li);
+        });
+    }
+</script>
+
+</body>
+</html>
+

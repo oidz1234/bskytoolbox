@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hashtag Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        .rank-up {
+            animation: rank-up 1s;
+        }
+        .rank-down {
+            animation: rank-down 1s;
+        }
+        @keyframes rank-up {
+            from { background-color: #d4f8d4; } /* Light green */
+            to { background-color: transparent; }
+        }
+        @keyframes rank-down {
+            from { background-color: #f8d4d4; } /* Light red */
+            to { background-color: transparent; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Hashtag Tracker</h1>
+    <label>
+        <input type="checkbox" id="filterToggle"> Show only hashtags used more than once
+    </label>
+    <table>
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Hashtag</th>
+                <th>Count</th>
+            </tr>
+        </thead>
+        <tbody id="hashtagTable">
+            <tr>
+                <td colspan="3">Waiting for data...</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        const socket = new WebSocket("wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post");
+        const hashtagCounts = {};
+        let previousRanks = {}; // Tracks previous rank positions
+        const hashtagTable = document.getElementById("hashtagTable");
+        const filterToggle = document.getElementById("filterToggle");
+
+        // Helper function to update the table
+        function updateTable() {
+            const sortedHashtags = Object.entries(hashtagCounts)
+                .filter(([hashtag, count]) =>
+                    !filterToggle.checked || count > 1 // Filter out single-use hashtags if toggle is enabled
+                )
+                .sort((a, b) => b[1] - a[1]) // Sort by count, descending
+                .slice(0, 100); // Take top 100
+
+            const newRanks = {};
+            hashtagTable.innerHTML = "";
+
+            sortedHashtags.forEach(([hashtag, count], index) => {
+                const rank = index + 1;
+                newRanks[hashtag] = rank;
+
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${rank}</td>
+                    <td>${hashtag}</td>
+                    <td>${count}</td>
+                `;
+
+                // Determine if rank has changed
+                if (previousRanks[hashtag] !== undefined) {
+                    if (rank < previousRanks[hashtag]) {
+                        row.classList.add("rank-up");
+                    } else if (rank > previousRanks[hashtag]) {
+                        row.classList.add("rank-down");
+                    }
+                }
+
+                hashtagTable.appendChild(row);
+            });
+
+            // Update previous ranks
+            previousRanks = newRanks;
+
+            if (sortedHashtags.length === 0) {
+                hashtagTable.innerHTML = "<tr><td colspan='3'>No hashtags found yet...</td></tr>";
+            }
+        }
+
+        // Helper function to normalize text and extract hashtags
+        function extractHashtags(text) {
+            return text.match(/#\w+/g) || []; // Match hashtags like #example
+        }
+
+        // WebSocket message event listener
+        socket.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                const text = message?.commit?.record?.text;
+
+                if (text) {
+                    const hashtags = extractHashtags(text);
+                    hashtags.forEach(hashtag => {
+                        hashtagCounts[hashtag] = (hashtagCounts[hashtag] || 0) + 1;
+                    });
+                    updateTable();
+                }
+            } catch (error) {
+                console.error("Error processing message:", error);
+            }
+        };
+
+        socket.onopen = () => console.log("WebSocket connection established.");
+        socket.onclose = () => console.log("WebSocket connection closed.");
+        socket.onerror = (error) => console.error("WebSocket error:", error);
+
+        // Update table on filter toggle change
+        filterToggle.addEventListener("change", updateTable);
+    </script>
+</body>
+</html>
+

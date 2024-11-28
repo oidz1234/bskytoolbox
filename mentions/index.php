@@ -67,7 +67,7 @@ try {
 
                 $messageText = "Yay, you can now view your matches, just type your email in";
     echo '
-    <form id="redirectForm" action="view-messages.php" method="POST">
+    <form id="redirectForm" action="./mentions/view-messages.php" method="POST">
         <input type="hidden" name="email" value="' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '">
     </form>
     <script>
@@ -87,7 +87,7 @@ try {
                 // Redirect to view messages if user has existing phrases
                 if ($phraseCount > 0) {
     echo '
-    <form id="redirectForm" action="view-messages.php" method="POST">
+    <form id="redirectForm" action="./mentions/view-messages.php" method="POST">
         <input type="hidden" name="email" value="' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '">
     </form>
     <script>
